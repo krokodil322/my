@@ -1,0 +1,6 @@
+account = BankAccount(100)
+
+try:
+    account.withdraw(150)
+except ValueError as e:
+    print(e)

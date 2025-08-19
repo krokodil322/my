@@ -1,0 +1,5 @@
+account1 = BankAccount(balance=100)
+account2 = BankAccount(balance=0)
+account1.transfer(account2, 20)
+print(account1.get_balance())
+print(account2.get_balance())

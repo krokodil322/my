@@ -1,0 +1,4 @@
+knight = Knight('c', 3, 'white')
+
+print(knight.color, knight.get_char())
+print(knight.horizontal, knight.vertical)

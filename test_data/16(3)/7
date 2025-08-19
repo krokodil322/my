@@ -1,0 +1,3 @@
+account = BankAccount(balance=10)
+account.withdraw(10)
+print(account.get_balance())

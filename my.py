@@ -9,7 +9,7 @@ import zipfile
 import tempfile
 import os
 import json
-import chardet
+
 
 class TestExecutor:
 	"""
@@ -32,37 +32,42 @@ class TestExecutor:
 		Предполагаемое использование: 
 			1) Запускать напрямую из модуля.
 			2) Либо импортировать в отдельный файл объект и 
-			   запустить файл.
+			   запускать тесты через этот файл. Вот мой вариант
+			   использования:
+			    from my import TestExecutor
+
+
+				if __name__ == "__main__":
+					obj = TestExecutor()
+					obj.run()
+
 			3) Вариант с импортом в тестируемую программу
 			   не предполагается.
 	"""
 
 	__STATUSES = ("SUCCESS", "FAILURE", "ERROR")
 
-	def __init__(self, archive_path: str='', programm_path: str=''):
+	def __init__(self):
 		"""
 			archive_path и programm_path - приходят в виде аргументов
 			только для теста этого объекта и не предполагается 
 			в качестве использования.
 		"""
-		if not archive_path or not programm_path:
-			cache = self._cache()
-			self.archive_path = filedialog.askopenfilename(
-				initialdir=cache["archive_path"],
-			    title="Выберите ZIP файл с тестами",
-			    filetypes=[("ZIP files", "*.zip")]
-			)
-			self.programm_path = filedialog.askopenfilename(
-				initialdir=cache["programm_path"],
-			    title="Выберите файл c программой на Python",
-			    filetypes=[("Python files", "*.py")]
-			)
-			self._cache(save=True)
-		else:
-			self.archive_path = archive_path
-			self.programm_path = programm_path
-		self.programm = self._read_file(path=self.programm_path)
+		cache = self._cache()
+		self.archive_path = filedialog.askopenfilename(
+			initialdir=cache["archive_path"],
+		    title="Выберите ZIP файл с тестами",
+		    filetypes=[("ZIP files", "*.zip")]
+		)
+		self.programm_path = filedialog.askopenfilename(
+			initialdir=cache["programm_path"],
+		    title="Выберите файл c программой на Python",
+		    filetypes=[("Python files", "*.py")]
+		)
+		self._cache(save=True)
+		self.programm = ''
 		self.status = None
+		self.encoding = "utf-8"
 
 	@staticmethod
 	def _read_file(path: str) -> str:
@@ -72,7 +77,8 @@ class TestExecutor:
 			для чтения текста программ, а потому предполагается,
 			что огромных файлов считываться не будет и перебоев
 			с ОЗУ быть не должно. Само собой, если считать файл
-			размером 100 ГБ комп упадет.
+			размером 100 ГБ комп упадет. В будущем данный метод
+			будет переработан под итератор.
 		"""
 		with open(path, encoding="utf-8") as file:
 			return file.read()
@@ -114,30 +120,50 @@ class TestExecutor:
 			zip_file.extractall(path=os.path.join(dirname, basename))
 		return os.path.join(os.path.dirname(self.archive_path), basename)
 
+	def _start_subprocess(self, stdin_, tmp_file: str) -> subprocess.Popen:
+		"""
+			Запускает тестируемую программу через subprocess.
+			Возвращает объект subprocess.Popen
+		"""
+		encoding = "cp1251"
+			# тут проснулся новый нюанс: У файлов с тестами иногда
+			# кодировка нихуя не utf-8. А вот с кодировкой cp1251
+			# все прекрасно работает
+		sub_popen = subprocess.Popen(
+				["python", tmp_file],
+				stdin=stdin_,
+				stdout=subprocess.PIPE,
+				stderr=subprocess.PIPE,
+				text=True,
+				encoding=encoding,
+				shell=True,
+			)
+		return sub_popen
+
 	def _test_executor(self) -> Generator:
 		"""
 			Главный метод, по очереди исполняет тесты из каждого файла
 			с тестовыми данными, реагирует на результаты работы, меняя
 			статус исполнения. Сам по себе является генератором.
 		"""
+		self.programm = self._read_file(path=self.programm_path)
 		new_archive_path = self._extract_zip()
 		files = chunked(os.listdir(new_archive_path), 2)
 		for req, res in files:
 			input_data = self._read_file(path=os.path.join(new_archive_path, req))
 			except_res = self._read_file(path=os.path.join(new_archive_path, res))
-			retry = 0
-			is_retry = True
+			retry, is_retry = 0, True
+			stdout_, stderr_, is_eq = None, None, None
 			# суть, если в input_data нету команд вызовов функций и т. п.
 			# но есть строки по типу I'm num, то интерпретатор воспринимает
 			# такую строку как SyntaxError, а потому не следует добавлять
-			# такие строки в конец программы. Кароч, если stderr_ отлбавливает
+			# такие строки в конец программы. Кароч, если stderr_ отлавливает
 			# SyntaxError, то этот блок кода он повторяет еще один раз
 			# если ошибка так и остается, то значит дело не в данных input_data.
 			while is_retry:
 				tmp_file_del = None
 				with tempfile.NamedTemporaryFile(
-						"w", 
-						suffix=".py", 
+						"w", suffix=".py", 
 						delete=False, 
 						dir=r"C:\programms", 
 						encoding="utf-8",
@@ -147,44 +173,26 @@ class TestExecutor:
 						tmp_file.write(self.programm + '\n' + input_data)
 					else:
 						tmp_file.write(self.programm)
-
 					with open(os.path.join(new_archive_path, req), encoding="utf-8") as file:
-						encoding = "utf-8"
-						retry_encode = 0
-						while True:
-							# тут проснулся новый нюанс: У файлов с тестами иногда
-							# кодировка нихуя не utf-8. Если вышибает ошибку при 
-							# попытке запустить subprocess с этой кодировкой, то
-							# то меняем кодировку на windows-1251 и пытаемся снова
-							# запустить, если все равно никак, то скип.
-							try:
-								output_data = subprocess.Popen(
-										["python", tmp_file.name],
-										stdin=file,
-										stdout=subprocess.PIPE,
-										stderr=subprocess.PIPE,
-										text=True,
-										encoding=encoding,
-										shell=True,
-									)
-							except UnicodeDecodeError:
-								if retry_encode > 1:
-									break
-								encoding="windows-1251"
-								retry_encode += 1
-							else:
-								break
+						sub_popen = self._start_subprocess(stdin_=file, tmp_file=tmp_file.name)
 				# вот это место блять решающее. Нельзя получить данные 
 				# .communicate пока поток временного файла не закрыт!
-				stdout_, stderr_ = output_data.communicate()
-				if "SyntaxError" in stderr_:
-					if retry > 1:
+				if sub_popen:
+					stdout_, stderr_ = sub_popen.communicate()
+					# stderr_ - обязательно типа str, такой ее выдает строка выше
+					# но был случай когда stderr_ был None, так и не понял почему
+					if stderr_ and "SyntaxError" in stderr_:
+						if retry > 1:
+							is_retry = False
+						retry += 1
+					else:
 						is_retry = False
-					retry += 1
+					if stdout_:
+						is_eq = stdout_.strip() == except_res
 				else:
-					is_retry = False
-				if stdout_:
-					is_eq = stdout_.strip() == except_res
+					print("Что-то пошло не так...")
+					return None
+				print(tmp_file_del.name)
 				os.remove(tmp_file_del.name)
 			if stderr_:
 				self.status = self.__STATUSES[2]
@@ -214,16 +222,46 @@ class TestExecutor:
 				print("===============================================")
 				if not is_eq:
 					if self.status == "ERROR":
-						print(f"У программы вышибло пробки по типу\n{stderr_}")
+						print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
 					elif self.status == "FAILURE":
 						print(f"ПРОВАЛ! ТЕСТ №{ivent}")
 					break
 			if self.status == "SUCCESS":
 				print("Все тесты пройдены!")
-			is_retry = input("Введи 1, если хочешь повторить: ")
-			if is_retry.rstrip() != '1':
+			if input("Введи 1, если хочешь повторить: ").rstrip() != '1':
 				return None
 
+
+class TestExecutorForTests(TestExecutor):
+	"""
+		Этот класс нужен чисто чтобы затестить класс TestExecutor
+	"""
+	def __init__(self, archive_path: str='', programm_path: str='') :
+		self.archive_path = archive_path
+		self.programm_path = programm_path
+		self.programm = None
+		self.status = None
+
+	def run(self) -> None:
+		for ivent, (
+				stdout_, except_res, 
+				input_data, stderr_, 
+				is_eq
+			) in enumerate(self._test_executor(), 1):
+			print(f"\nТест №{ivent}")
+			print("===============================================")
+			print(f"Входящие данные:\n{input_data}")
+			print(f"Ожидаемый результат:\n{except_res}")
+			print(f"Выход тестируемой программы:\n{stdout_}")
+			print("===============================================")
+			if not is_eq:
+				if self.status == "ERROR":
+					print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
+				elif self.status == "FAILURE":
+					print(f"ПРОВАЛ! ТЕСТ №{ivent}")
+				break
+		if self.status == "SUCCESS":
+			print("Все тесты пройдены!")
 
 def recviz(function):
 	"""

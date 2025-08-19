@@ -1,0 +1,8 @@
+knight = Knight('c', 3, 'white')
+
+print(knight.horizontal, knight.vertical)
+print(knight.can_move('e', 5))
+print(knight.can_move('e', 4))
+
+knight.move_to('e', 4)
+print(knight.horizontal, knight.vertical)
