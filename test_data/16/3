@@ -1,3 +1,0 @@
-knight = Knight('c', 3, 'white')
-
-knight.draw_board()

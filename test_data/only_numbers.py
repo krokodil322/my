@@ -15,10 +15,4 @@ for value in sys.stdin:
 print(counter["nums"], counter["not_nums"], sep="\n")
 
 
-if __name__ == "__main__":
-	obj = my.TestExecutor(
-			archive_path="tests_3013981.zip",
-			programm_path=__file__,
-		)
-
 

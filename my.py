@@ -126,9 +126,9 @@ class TestExecutor:
 			Возвращает объект subprocess.Popen
 		"""
 		encoding = "cp1251"
-			# тут проснулся новый нюанс: У файлов с тестами иногда
-			# кодировка нихуя не utf-8. А вот с кодировкой cp1251
-			# все прекрасно работает
+		# тут проснулся новый нюанс: У файлов с тестами иногда
+		# кодировка нихуя не utf-8. А вот с кодировкой cp1251
+		# все прекрасно работает
 		sub_popen = subprocess.Popen(
 				["python", tmp_file],
 				stdin=stdin_,
@@ -161,14 +161,12 @@ class TestExecutor:
 			# SyntaxError, то этот блок кода он повторяет еще один раз
 			# если ошибка так и остается, то значит дело не в данных input_data.
 			while is_retry:
-				tmp_file_del = None
 				with tempfile.NamedTemporaryFile(
 						"w", suffix=".py", 
 						delete=False, 
 						dir=r"C:\programms", 
 						encoding="utf-8",
 					) as tmp_file:
-					tmp_file_del = tmp_file
 					if retry == 0:
 						tmp_file.write(self.programm + '\n' + input_data)
 					else:
@@ -188,12 +186,11 @@ class TestExecutor:
 					else:
 						is_retry = False
 					if stdout_:
-						is_eq = stdout_.strip() == except_res
+						is_eq = stdout_.rstrip() == except_res
 				else:
 					print("Что-то пошло не так...")
 					return None
-				print(tmp_file_del.name)
-				os.remove(tmp_file_del.name)
+				os.remove(tmp_file.name)
 			if stderr_:
 				self.status = self.__STATUSES[2]
 			elif not is_eq:
@@ -207,6 +204,8 @@ class TestExecutor:
 			Работает с пользователем. Выводит на экран 
 			сообщения. Кароче, это интерфейс взаимодействия.
 		"""
+		print(self.programm_path)
+		print(self.archive_path)
 		is_run = True
 		while is_run:
 			for ivent, (
@@ -242,7 +241,9 @@ class TestExecutorForTests(TestExecutor):
 		self.programm = None
 		self.status = None
 
-	def run(self) -> None:
+	def run(self) -> tuple | None:
+		print(self.programm_path)
+		print(self.archive_path)
 		for ivent, (
 				stdout_, except_res, 
 				input_data, stderr_, 
@@ -259,9 +260,10 @@ class TestExecutorForTests(TestExecutor):
 					print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
 				elif self.status == "FAILURE":
 					print(f"ПРОВАЛ! ТЕСТ №{ivent}")
-				break
+				return self.status, stderr_
 		if self.status == "SUCCESS":
 			print("Все тесты пройдены!")
+		return self.status, None
 
 def recviz(function):
 	"""
