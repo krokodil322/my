@@ -1,0 +1,2 @@
+print(StrExtension.remove_vowels('Python'))
+print(StrExtension.remove_vowels('Stepik'))

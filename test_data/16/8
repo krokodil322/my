@@ -1,0 +1,2 @@
+knight = Knight('h', 1, 'black')
+knight.draw_board()

@@ -1,0 +1,7 @@
+account = BankAccount()
+
+print(account.get_balance())
+account.deposit(100)
+print(account.get_balance())
+account.withdraw(50)
+print(account.get_balance())

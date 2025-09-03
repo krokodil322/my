@@ -1,0 +1,2 @@
+account = BankAccount()
+print(hasattr(account, '_balance'))

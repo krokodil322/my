@@ -1,0 +1,2 @@
+print(StrExtension.leave_alpha('Python111'))
+print(StrExtension.leave_alpha('__Stepik__()'))

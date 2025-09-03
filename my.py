@@ -43,6 +43,8 @@ class TestExecutor:
 
 			3) Вариант с импортом в тестируемую программу
 			   не предполагается.
+			4) Запускает рекомендуется через командную строку, ибо
+			   иногда есть какие-то трабы с кодировкой.
 	"""
 
 	__STATUSES = ("SUCCESS", "FAILURE", "ERROR")
@@ -65,9 +67,13 @@ class TestExecutor:
 		    filetypes=[("Python files", "*.py")]
 		)
 		self._cache(save=True)
+
+		# код программы хранится тут
 		self.programm = ''
+
+		# статус исполненных тестов
+		# все виды стутасов лежат в константе __STATUSES
 		self.status = None
-		self.encoding = "utf-8"
 
 	@staticmethod
 	def _read_file(path: str) -> str:
@@ -86,8 +92,8 @@ class TestExecutor:
 	def _cache(self, save: bool=False) -> dict:
 		"""
 			Сохраняет в кэш-файл пути к последним открытым папкам
-			с архивом тестов и программой. Добавляет удобство,
-			не нужно лишний раз кучу раз тыкать по до нужной папки.
+			с архивом тестов и файла программы. Добавляет удобство,
+			не нужно лишний раз кучу раз тыкать до нужной папки с файлами.
 		"""
 		def save_cache(data: dict):
 			with open(cache_path, 'w', encoding="utf-8") as file:
@@ -173,8 +179,6 @@ class TestExecutor:
 						tmp_file.write(self.programm)
 					with open(os.path.join(new_archive_path, req), encoding="utf-8") as file:
 						sub_popen = self._start_subprocess(stdin_=file, tmp_file=tmp_file.name)
-				# вот это место блять решающее. Нельзя получить данные 
-				# .communicate пока поток временного файла не закрыт!
 				if sub_popen:
 					stdout_, stderr_ = sub_popen.communicate()
 					# stderr_ - обязательно типа str, такой ее выдает строка выше
@@ -202,12 +206,17 @@ class TestExecutor:
 	def run(self) -> None:
 		"""
 			Работает с пользователем. Выводит на экран 
-			сообщения. Кароче, это интерфейс взаимодействия.
+			сообщения. Кароче, это пользовательский интерфейс.
+
+			Повтор тестов очень удобен в случаях когда тесты
+			провалились и нужно допилить тестируемую программу.
+			После допила кода просто перезапускаешь тесты без
+			всей возник с выбором архива с тестами и файла программы
+			в файловом менеджере.
 		"""
 		print(self.programm_path)
 		print(self.archive_path)
-		is_run = True
-		while is_run:
+		while True:
 			for ivent, (
 					stdout_, except_res, 
 					input_data, stderr_, 
@@ -227,13 +236,15 @@ class TestExecutor:
 					break
 			if self.status == "SUCCESS":
 				print("Все тесты пройдены!")
-			if input("Введи 1, если хочешь повторить: ").rstrip() != '1':
+			if input("(y/n), если хочешь повторить: ").rstrip() != 'y':
 				return None
 
 
 class TestExecutorForTests(TestExecutor):
 	"""
-		Этот класс нужен чисто чтобы затестить класс TestExecutor
+		Этот класс нужен чисто чтобы затестить класс TestExecutor.
+		Для тестов нужно подшаманить пользовательский интерфейс
+		чтобы он не заправшивал повтор тестов.
 	"""
 	def __init__(self, archive_path: str='', programm_path: str='') :
 		self.archive_path = archive_path
@@ -241,7 +252,7 @@ class TestExecutorForTests(TestExecutor):
 		self.programm = None
 		self.status = None
 
-	def run(self) -> tuple | None:
+	def run(self) -> tuple:
 		print(self.programm_path)
 		print(self.archive_path)
 		for ivent, (
@@ -268,7 +279,7 @@ class TestExecutorForTests(TestExecutor):
 def recviz(function):
 	"""
 		Декоратор наглядно показывает порядок вызова функции.
-		Учитывает рекурсивные вызовы.
+		Учитывает рекурсивные вызовы. 
 		Примеры: 
 		
 		@recviz
@@ -314,6 +325,22 @@ def recviz(function):
 		        <- 6
 		    <- 24
 		<- 120
+
+		Хочу заметить, что, если в рекурссивной функции реализовано
+		замыкание такого вида:
+		def number_of_frogs(year: int):
+			frogs = 77
+			@recviz
+			def wrapper(n: int=1) -> int:
+				nonlocal frogs
+				if n == year:
+					return frogs
+				else:
+					frogs = 3 * (frogs - 30)
+					# print(n)
+					return wrapper(n + 1)
+			return wrapper()
+		слудет декорировать вложенную функцию Ы
 
 	"""
 	depth = -1
