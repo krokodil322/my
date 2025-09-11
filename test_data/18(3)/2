@@ -1,0 +1,5 @@
+words = [Word('python'), Word('bee'), Word('geek')]
+
+print(sorted(words))
+print(min(words))
+print(max(words))

@@ -1,0 +1,4 @@
+string = ReversibleString('python')
+
+print(string)
+print(-string)

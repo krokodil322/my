@@ -1,0 +1,4 @@
+string = ReversibleString("Namespaces are one honking great idea -- let's do more of those!")
+
+print(string)
+print(-string)

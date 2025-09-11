@@ -1,0 +1,4 @@
+string = ReversibleString('beegeek')
+
+print(-string)
+print(type(-string))

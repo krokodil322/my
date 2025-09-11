@@ -13,10 +13,6 @@ import json
 
 class TestExecutor:
 	"""
-		следует испрвить, сделать так чтобы в оперативу не
-		пападал весь текст программы, сделать все через итераторы
-		Не работает, если в тексте программы возбуждается
-
 		Класс предназначен для проведения тестов задач 
 		с курсов BeeGeek И ТОЛЬКО.
 
@@ -46,7 +42,6 @@ class TestExecutor:
 			4) Запускает рекомендуется через командную строку, ибо
 			   иногда есть какие-то трабы с кодировкой.
 	"""
-
 	__STATUSES = ("SUCCESS", "FAILURE", "ERROR")
 
 	def __init__(self):
@@ -68,26 +63,22 @@ class TestExecutor:
 		)
 		self._cache(save=True)
 
-		# код программы хранится тут
-		self.programm = ''
-
 		# статус исполненных тестов
 		# все виды стутасов лежат в константе __STATUSES
 		self.status = None
 
 	@staticmethod
-	def _read_file(path: str) -> str:
+	def _read_file(path: str) -> Generator:
 		"""
-			Просто читает текстовый файл и возвращает
-			его в виде строки. В данном классе используется
-			для чтения текста программ, а потому предполагается,
-			что огромных файлов считываться не будет и перебоев
-			с ОЗУ быть не должно. Само собой, если считать файл
-			размером 100 ГБ комп упадет. В будущем данный метод
-			будет переработан под итератор.
+			Выдает построчно текст файла.
 		"""
-		with open(path, encoding="utf-8") as file:
-			return file.read()
+		try:
+			file = open(path, encoding="utf-8")
+			yield from file
+		except Exception as err:
+			print(err)
+		finally:
+			file.close()
 
 	def _cache(self, save: bool=False) -> dict:
 		"""
@@ -152,48 +143,47 @@ class TestExecutor:
 			с тестовыми данными, реагирует на результаты работы, меняя
 			статус исполнения. Сам по себе является генератором.
 		"""
-		self.programm = self._read_file(path=self.programm_path)
-		new_archive_path = self._extract_zip()
-		files = chunked(os.listdir(new_archive_path), 2)
-		for req, res in files:
-			input_data = self._read_file(path=os.path.join(new_archive_path, req))
-			except_res = self._read_file(path=os.path.join(new_archive_path, res))
+		unpack_arch_path = self._extract_zip()
+		for req, res in chunked(os.listdir(unpack_arch_path), 2):
+			# подразумевается, что вызывающий код и входящие данные не имеют огромных объемов
+			# так как он раскидан по отдельным файлам в тестовом архиве
 			retry, is_retry = 0, True
-			stdout_, stderr_, is_eq = None, None, None
 			# суть, если в input_data нету команд вызовов функций и т. п.
-			# но есть строки по типу I'm num, то интерпретатор воспринимает
+			# но есть строки по типу I'm num, то интерпретатор сука воспринимает
 			# такую строку как SyntaxError, а потому не следует добавлять
 			# такие строки в конец программы. Кароч, если stderr_ отлавливает
 			# SyntaxError, то этот блок кода он повторяет еще один раз
 			# если ошибка так и остается, то значит дело не в данных input_data.
 			while is_retry:
-				with tempfile.NamedTemporaryFile(
-						"w", suffix=".py", 
-						delete=False, 
-						dir=r"C:\programms", 
-						encoding="utf-8",
-					) as tmp_file:
+				kwargs = {"suffix": ".py", "delete": False, "dir": r"C:\programms", "encoding": "utf-8"}
+				with tempfile.NamedTemporaryFile("w", **kwargs) as tmp_file:
+					# для экономии ОЗУ записывание текста программы
+					# в темп файл реализовано через генератор
+					for code_row in self._read_file(path=self.programm_path):
+						tmp_file.write(code_row)
+					# этот блок сработает только в первый трай
 					if retry == 0:
-						tmp_file.write(self.programm + '\n' + input_data)
-					else:
-						tmp_file.write(self.programm)
-					with open(os.path.join(new_archive_path, req), encoding="utf-8") as file:
+						tmp_file.write('\n')
+						for call_code in self._read_file(path=os.path.join(unpack_arch_path, req)):
+							tmp_file.write(call_code)
+					with open(os.path.join(unpack_arch_path, req), encoding="utf-8") as file:
 						sub_popen = self._start_subprocess(stdin_=file, tmp_file=tmp_file.name)
-				if sub_popen:
-					stdout_, stderr_ = sub_popen.communicate()
-					# stderr_ - обязательно типа str, такой ее выдает строка выше
-					# но был случай когда stderr_ был None, так и не понял почему
-					if stderr_ and "SyntaxError" in stderr_:
-						if retry > 1:
-							is_retry = False
-						retry += 1
-					else:
+				stdout_, stderr_ = sub_popen.communicate()
+				# stderr_ - обязательно типа str, такой ее выдает строка выше
+				# но был случай когда stderr_ был None, так и не понял почему
+				if stderr_ and "SyntaxError" in stderr_:
+					if retry > 1:
 						is_retry = False
-					if stdout_:
-						is_eq = stdout_.rstrip() == except_res
+					retry += 1
 				else:
-					print("Что-то пошло не так...")
-					return None
+					is_retry = False
+				if stdout_:
+					# rstrip тупит когда ожидаемый результат \n\n. Стрипует
+					# полностью stdout_ \n\n и на выходе получает ''
+					# из-за чего тест падает, хотя код написан правильно
+					stdout_ = stdout_[:-1] if stdout_.endswith('\n') else stdout_
+					is_eq = stdout_ == ''.join(self._read_file(path=os.path.join(unpack_arch_path, res)))
+				# ты же не хочешь чтобы тебе заспамило папку говном?
 				os.remove(tmp_file.name)
 			if stderr_:
 				self.status = self.__STATUSES[2]
@@ -201,6 +191,8 @@ class TestExecutor:
 				self.status = self.__STATUSES[1]
 			else:
 				self.status = self.__STATUSES[0]
+			except_res = self._read_file(path=os.path.join(unpack_arch_path, res))
+			input_data = self._read_file(path=os.path.join(unpack_arch_path, req))
 			yield stdout_, except_res, input_data, stderr_, is_eq
 		
 	def run(self) -> None:
@@ -216,17 +208,19 @@ class TestExecutor:
 		"""
 		print(self.programm_path)
 		print(self.archive_path)
-		while True:
-			for ivent, (
-					stdout_, except_res, 
-					input_data, stderr_, 
-					is_eq
-				) in enumerate(self._test_executor(), 1):
+		retry = 'y'
+		while retry != 'n':
+			for ivent, group in enumerate(self._test_executor(), 1):
+				stdout_, except_res, input_data, stderr_, is_eq = group
 				print(f"\nТест №{ivent}")
 				print("===============================================")
-				print(f"Входящие данные:\n{input_data}")
-				print(f"Ожидаемый результат:\n{except_res}")
-				print(f"Выход тестируемой программы:\n{stdout_}")
+				print(f"Входящие данные:")
+				for row in input_data:
+					print(row, end='')
+				print(f"\n\nОжидаемый результат:")
+				for row in except_res:
+					print(row, end='')
+				print(f"\n\nВыход тестируемой программы:\n{stdout_}")
 				print("===============================================")
 				if not is_eq:
 					if self.status == "ERROR":
@@ -236,8 +230,9 @@ class TestExecutor:
 					break
 			if self.status == "SUCCESS":
 				print("Все тесты пройдены!")
-			if input("(y/n), если хочешь повторить: ").rstrip() != 'y':
-				return None
+			retry = ''
+			while retry not in ('y', 'n'):
+				retry = input("(y/n), если хочешь повторить: ").rstrip().lower()
 
 
 class TestExecutorForTests(TestExecutor):
@@ -255,23 +250,24 @@ class TestExecutorForTests(TestExecutor):
 	def run(self) -> tuple:
 		print(self.programm_path)
 		print(self.archive_path)
-		for ivent, (
-				stdout_, except_res, 
-				input_data, stderr_, 
-				is_eq
-			) in enumerate(self._test_executor(), 1):
+		for ivent, group in enumerate(self._test_executor(), 1):
+			stdout_, except_res, input_data, stderr_, is_eq = group
 			print(f"\nТест №{ivent}")
 			print("===============================================")
-			print(f"Входящие данные:\n{input_data}")
-			print(f"Ожидаемый результат:\n{except_res}")
-			print(f"Выход тестируемой программы:\n{stdout_}")
+			print(f"Входящие данные:")
+			for row in input_data:
+				print(row, end='')
+			print(f"\n\nОжидаемый результат:")
+			for row in except_res:
+				print(row, end='')
+			print(f"\n\nВыход тестируемой программы:\n{stdout_}")
 			print("===============================================")
 			if not is_eq:
 				if self.status == "ERROR":
 					print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
 				elif self.status == "FAILURE":
 					print(f"ПРОВАЛ! ТЕСТ №{ivent}")
-				return self.status, stderr_
+				break
 		if self.status == "SUCCESS":
 			print("Все тесты пройдены!")
 		return self.status, None
@@ -373,7 +369,7 @@ def measure(function) -> Callable:
 		res = function(*args, **kwargs)
 		end_time = time.perf_counter()
 		current, peak = tracemalloc.get_traced_memory()
-		print(f"Время выполнения программы: {end_time - start_time}")
+		print(f"Время выполнения программы: {round(end_time - start_time, 3)} сек")
 		print(f"Текущая память: {current / 1024 / 1024:.2f} MB")
 		print(f"Пиковое использование памяти: {peak / 1024 / 1024:.2f} MB")
 		tracemalloc.stop()

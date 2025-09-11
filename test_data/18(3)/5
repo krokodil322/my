@@ -1,0 +1,4 @@
+word = Word('station')
+words = [Word('conference'), Word('station'), Word('box'), Word('arrive'), Word('respond')]
+
+print(word in words)

@@ -1,0 +1,5 @@
+word = Word('Beegeek')
+not_supported = [range(10), iter([1, 2, 3]), True, False, 85.34, {'Erich Gamma', 'Richard Helm', 'Ralph Johnson', 'John Matthew Vlissides'}]
+
+for obj in not_supported:
+    print(word == obj)

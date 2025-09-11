@@ -13,6 +13,8 @@ def run_tests() -> None:
 		("Pycon.py", "11.zip"), # тут input()
 		("guru.py", "tests_3066209.zip"), # тут stdin
 		("StrExtension.py", "15(5).zip"), # тут хуйня с rstrip
+		("Words.py", "18(3).zip"), # тут класс в котором сравниваются объекты
+		("ReversibleString.py", "10(2).zip") # тут на выходе строка вида '\n\n' стриповалась
 	]
 	module_path = os.path.dirname(__file__)
 	tests_path = os.path.join(module_path, "test_data")

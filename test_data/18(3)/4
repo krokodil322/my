@@ -1,0 +1,25 @@
+words = [
+    Word('seven'),
+    Word('season'),
+    Word('probably'),
+    Word('difficult'),
+    Word('size'),
+    Word('feeling'),
+    Word('either'),
+    Word('friend'),
+    Word('whatever'),
+    Word('item'),
+    Word('evening'),
+    Word('that'),
+    Word('either'),
+    Word('last'),
+    Word('north'),
+    Word('run'),
+    Word('read'),
+    Word('respond'),
+    Word('amount'),
+    Word('maybe')
+]
+
+for word in words:
+    print(word)

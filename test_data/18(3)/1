@@ -1,0 +1,5 @@
+print(Word('bee') == Word('hey'))
+print(Word('bee') < Word('geek'))
+print(Word('bee') > Word('geek'))
+print(Word('bee') <= Word('geek'))
+print(Word('bee') >= Word('gee'))

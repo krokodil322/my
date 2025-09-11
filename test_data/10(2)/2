@@ -1,0 +1,4 @@
+string = ReversibleString('p')
+
+print(string)
+print(-string)
