@@ -1,5 +1,4 @@
 import sys
-import my
 
 
 counter = {"nums": 0, "not_nums": 0}

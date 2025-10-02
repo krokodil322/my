@@ -12,391 +12,390 @@ import json
 
 
 class TestExecutor:
-	"""
-		Класс предназначен для проведения тестов задач 
-		с курсов BeeGeek И ТОЛЬКО.
+    """
+        Класс предназначен для проведения тестов задач 
+        с курсов BeeGeek И ТОЛЬКО.
 
-		Открывает оконный менеджер файлов для выбора нужного
-		zip-архива и тестируемой программы. Распаковывает архив,
-		и вставляя определенным образом в код программы запускает
-		тесты. Всячески реагирует на результаты тестов и сообщает
-		об успехе или неудаче.
+        Открывает оконный менеджер файлов для выбора нужного
+        zip-архива и тестируемой программы. Распаковывает архив,
+        и вставляя определенным образом в код программы запускает
+        тесты. Всячески реагирует на результаты тестов и сообщает
+        об успехе или неудаче.
 
-		Реализован мини-кэш для сохранения путей последних открытых
-		папок с zip-архивом и программой, просто для удобства.
+        Реализован мини-кэш для сохранения путей последних открытых
+        папок с zip-архивом и программой, просто для удобства.
 
-		Предполагаемое использование: 
-			1) Запускать напрямую из модуля.
-			2) Либо импортировать в отдельный файл объект и 
-			   запускать тесты через этот файл. Вот мой вариант
-			   использования:
-			    from my import TestExecutor
+        Предполагаемое использование: 
+            1) Запускать напрямую из модуля.
+            2) Либо импортировать в отдельный файл объект и 
+               запускать тесты через этот файл. Вот мой вариант
+               использования:
+                from my import TestExecutor
 
 
-				if __name__ == "__main__":
-					obj = TestExecutor()
-					obj.run()
+                if __name__ == "__main__":
+                    obj = TestExecutor()
+                    obj.run()
 
-			3) Вариант с импортом в тестируемую программу
-			   не предполагается.
-			4) Запускает рекомендуется через командную строку, ибо
-			   иногда есть какие-то трабы с кодировкой.
+            3) Вариант с импортом в тестируемую программу
+               не предполагается.
+            4) Запускает рекомендуется через командную строку, ибо
+               иногда есть какие-то трабы с кодировкой. 
+    """
+    __STATUSES = ("SUCCESS", "FAILURE", "ERROR")
 
-		ДЛЯ ТЕСТОВОГО КОММИТА ЧТОБЫ НАУЧИТСЯ ОТКАТЫВАТЬ ДО ПРОШЛОГО КОММИТА.    
-	"""
-	__STATUSES = ("SUCCESS", "FAILURE", "ERROR")
+    def __init__(self):
+        """
+            archive_path и programm_path - приходят в виде аргументов
+            только для теста этого объекта и не предполагается 
+            в качестве использования.
+        """
+        cache = self._cache()
+        self.archive_path = filedialog.askopenfilename(
+            initialdir=cache["archive_path"],
+            title="Выберите ZIP файл с тестами",
+            filetypes=[("ZIP files", "*.zip")]
+        )
+        self.programm_path = filedialog.askopenfilename(
+            initialdir=cache["programm_path"],
+            title="Выберите файл c программой на Python",
+            filetypes=[("Python files", "*.py")]
+        )
+        self._cache(save=True)
+        # статус исполненных тестов
+        # все виды стутасов лежат в константе __STATUSES
+        self.status = None
 
-	def __init__(self):
-		"""
-			archive_path и programm_path - приходят в виде аргументов
-			только для теста этого объекта и не предполагается 
-			в качестве использования.
-		"""
-		cache = self._cache()
-		self.archive_path = filedialog.askopenfilename(
-			initialdir=cache["archive_path"],
-		    title="Выберите ZIP файл с тестами",
-		    filetypes=[("ZIP files", "*.zip")]
-		)
-		self.programm_path = filedialog.askopenfilename(
-			initialdir=cache["programm_path"],
-		    title="Выберите файл c программой на Python",
-		    filetypes=[("Python files", "*.py")]
-		)
-		self._cache(save=True)
+    @staticmethod
+    def _read_file(path: str) -> Generator:
+        """
+            Выдает построчно текст файла.
+        """
+        try:
+            file = open(path, encoding="utf-8")
+            yield from file
+        except Exception as err:
+            print(err)
+        finally:
+            file.close()
 
-		# статус исполненных тестов
-		# все виды стутасов лежат в константе __STATUSES
-		self.status = None
+    def _cache(self, save: bool=False) -> dict:
+        """
+            Сохраняет в кэш-файл пути к последним открытым папкам
+            с архивом тестов и файла программы. Добавляет удобство,
+            не нужно лишний раз кучу раз тыкать до нужной папки с файлами.
+        """
+        def save_cache(data: dict):
+            with open(cache_path, 'w', encoding="utf-8") as file:
+                json.dump(data, fp=file, indent=3, ensure_ascii=False)
+        module_path = os.path.dirname(__file__)
+        dir_path = os.path.join(module_path, "cache")
+        cache_path = os.path.join(dir_path, "cache.json")
+        data, cache = {"archive_path": '', "programm_path": ''}, {}
+        if not save:
+            if not os.path.exists(dir_path):
+                os.mkdir(dir_path)
+            if not os.path.exists(cache_path):
+                save_cache(data)
+        with open(cache_path, 'r', encoding="utf-8") as file:
+            cache = json.load(fp=file)
+        if save:
+            cache["archive_path"] = os.path.dirname(self.archive_path)
+            cache["programm_path"] = os.path.dirname(self.programm_path)
+            save_cache(data=cache)
+        return cache
 
-	@staticmethod
-	def _read_file(path: str) -> Generator:
-		"""
-			Выдает построчно текст файла.
-		"""
-		try:
-			file = open(path, encoding="utf-8")
-			yield from file
-		except Exception as err:
-			print(err)
-		finally:
-			file.close()
+    def _extract_zip(self) -> str:
+        """
+            Распаковывает zip архив и возвращает путь 
+            к распакованной папке.
+        """
+        with zipfile.ZipFile(self.archive_path) as zip_file:
+            basename = os.path.basename(self.archive_path).split('.zip')[0]
+            dirname = os.path.dirname(self.archive_path)
+            zip_file.extractall(path=os.path.join(dirname, basename))
+        return os.path.join(os.path.dirname(self.archive_path), basename)
 
-	def _cache(self, save: bool=False) -> dict:
-		"""
-			Сохраняет в кэш-файл пути к последним открытым папкам
-			с архивом тестов и файла программы. Добавляет удобство,
-			не нужно лишний раз кучу раз тыкать до нужной папки с файлами.
-		"""
-		def save_cache(data: dict):
-			with open(cache_path, 'w', encoding="utf-8") as file:
-				json.dump(data, fp=file, indent=3, ensure_ascii=False)
-		module_path = os.path.dirname(__file__)
-		dir_path = os.path.join(module_path, "cache")
-		cache_path = os.path.join(dir_path, "cache.json")
-		data, cache = {"archive_path": '', "programm_path": ''}, {}
-		if not save:
-			if not os.path.exists(dir_path):
-				os.mkdir(dir_path)
-			if not os.path.exists(cache_path):
-				save_cache(data)
-		with open(cache_path, 'r', encoding="utf-8") as file:
-			cache = json.load(fp=file)
-		if save:
-			cache["archive_path"] = os.path.dirname(self.archive_path)
-			cache["programm_path"] = os.path.dirname(self.programm_path)
-			save_cache(data=cache)
-		return cache
+    def _start_subprocess(self, stdin_, tmp_file: str) -> subprocess.Popen:
+        """
+            Запускает тестируемую программу через subprocess.
+            Возвращает объект subprocess.Popen
+        """
+        encoding = "cp1251"
+        # тут проснулся новый нюанс: У файлов с тестами иногда
+        # кодировка нихуя не utf-8. А вот с кодировкой cp1251
+        # все прекрасно работает
+        sub_popen = subprocess.Popen(
+                ["python", tmp_file],
+                stdin=stdin_,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding=encoding,
+                shell=True,
+            )
+        return sub_popen
 
-	def _extract_zip(self) -> str:
-		"""
-			Распаковывает zip архив и возвращает путь 
-			к распакованной папке.
-		"""
-		with zipfile.ZipFile(self.archive_path) as zip_file:
-			basename = os.path.basename(self.archive_path).split('.zip')[0]
-			dirname = os.path.dirname(self.archive_path)
-			zip_file.extractall(path=os.path.join(dirname, basename))
-		return os.path.join(os.path.dirname(self.archive_path), basename)
+    def _test_executor(self) -> Generator:
+        """
+            Главный метод, по очереди исполняет тесты из каждого файла
+            с тестовыми данными, реагирует на результаты работы, меняя
+            статус исполнения. Сам по себе является генератором.
+        """
+        unpack_arch_path = self._extract_zip()
+        for req, res in chunked(os.listdir(unpack_arch_path), 2):
+            # подразумевается, что вызывающий код и входящие данные не имеют огромных объемов
+            # так как он раскидан по отдельным файлам в тестовом архиве
+            stderr_, is_eq = None, False
+            retry, is_retry = 0, True
+            # суть, если в input_data нету команд вызовов функций и т. п.
+            # но есть строки по типу I'm num, то интерпретатор сука воспринимает
+            # такую строку как SyntaxError, а потому не следует добавлять
+            # такие строки в конец программы. Кароч, если stderr_ отлавливает
+            # SyntaxError, то этот блок кода он повторяет еще один раз
+            # если ошибка так и остается, то значит дело не в данных input_data.
+            while is_retry:
+                kwargs = {"suffix": ".py", "delete": False, "encoding": "utf-8"}
+                with tempfile.NamedTemporaryFile("w", **kwargs) as tmp_file:
+                    # для экономии ОЗУ записывание текста программы
+                    # в темп файл реализовано через генератор
+                    for code_row in self._read_file(path=self.programm_path):
+                        tmp_file.write(code_row)
+                    # этот блок сработает только в первый трай
+                    if retry == 0:
+                        tmp_file.write('\n')
+                        for call_code in self._read_file(path=os.path.join(unpack_arch_path, req)):
+                            tmp_file.write(call_code)
+                    with open(os.path.join(unpack_arch_path, req), encoding="utf-8") as file:
+                        sub_popen = self._start_subprocess(stdin_=file, tmp_file=tmp_file.name)
+                stdout_, stderr_ = sub_popen.communicate()
+                # stderr_ - обязательно типа str, такой ее выдает строка выше
+                # но был случай когда stderr_ был None, так и не понял почему
+                if stderr_ and "SyntaxError" in stderr_:
+                    if retry >= 1:
+                        is_retry = False
+                    else:
+                        retry += 1
+                else:
+                    is_retry = False
+                if stdout_:
+                    # rstrip тупит когда ожидаемый результат \n\n. Стрипует
+                    # полностью stdout_ \n\n и на выходе получает ''
+                    # из-за чего тест падает, хотя код написан правильно
+                    stdout_ = stdout_[:-1] if stdout_.endswith('\n') else stdout_
+                    is_eq = stdout_ == ''.join(self._read_file(path=os.path.join(unpack_arch_path, res)))
+                # ты же не хочешь чтобы тебе заспамило папку говном?
+                os.remove(tmp_file.name)
+            if stderr_:
+                self.status = self.__STATUSES[2]
+            elif not is_eq:
+                self.status = self.__STATUSES[1]
+            else:
+                self.status = self.__STATUSES[0]
+            except_res = self._read_file(path=os.path.join(unpack_arch_path, res))
+            input_data = self._read_file(path=os.path.join(unpack_arch_path, req))
+            yield stdout_, except_res, input_data, stderr_, is_eq
+    
+    def run(self) -> None:
+        """
+            Работает с пользователем. Выводит на экран 
+            сообщения. Кароче, это пользовательский интерфейс.
 
-	def _start_subprocess(self, stdin_, tmp_file: str) -> subprocess.Popen:
-		"""
-			Запускает тестируемую программу через subprocess.
-			Возвращает объект subprocess.Popen
-		"""
-		encoding = "cp1251"
-		# тут проснулся новый нюанс: У файлов с тестами иногда
-		# кодировка нихуя не utf-8. А вот с кодировкой cp1251
-		# все прекрасно работает
-		sub_popen = subprocess.Popen(
-				["python", tmp_file],
-				stdin=stdin_,
-				stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,
-				text=True,
-				encoding=encoding,
-				shell=True,
-			)
-		return sub_popen
-
-	def _test_executor(self) -> Generator:
-		"""
-			Главный метод, по очереди исполняет тесты из каждого файла
-			с тестовыми данными, реагирует на результаты работы, меняя
-			статус исполнения. Сам по себе является генератором.
-		"""
-		unpack_arch_path = self._extract_zip()
-		for req, res in chunked(os.listdir(unpack_arch_path), 2):
-			# подразумевается, что вызывающий код и входящие данные не имеют огромных объемов
-			# так как он раскидан по отдельным файлам в тестовом архиве
-			retry, is_retry = 0, True
-			# суть, если в input_data нету команд вызовов функций и т. п.
-			# но есть строки по типу I'm num, то интерпретатор сука воспринимает
-			# такую строку как SyntaxError, а потому не следует добавлять
-			# такие строки в конец программы. Кароч, если stderr_ отлавливает
-			# SyntaxError, то этот блок кода он повторяет еще один раз
-			# если ошибка так и остается, то значит дело не в данных input_data.
-			while is_retry:
-				kwargs = {"suffix": ".py", "delete": False, "dir": r"C:\programms", "encoding": "utf-8"}
-				with tempfile.NamedTemporaryFile("w", **kwargs) as tmp_file:
-					# для экономии ОЗУ записывание текста программы
-					# в темп файл реализовано через генератор
-					for code_row in self._read_file(path=self.programm_path):
-						tmp_file.write(code_row)
-					# этот блок сработает только в первый трай
-					if retry == 0:
-						tmp_file.write('\n')
-						for call_code in self._read_file(path=os.path.join(unpack_arch_path, req)):
-							tmp_file.write(call_code)
-					with open(os.path.join(unpack_arch_path, req), encoding="utf-8") as file:
-						sub_popen = self._start_subprocess(stdin_=file, tmp_file=tmp_file.name)
-				stdout_, stderr_ = sub_popen.communicate()
-				# stderr_ - обязательно типа str, такой ее выдает строка выше
-				# но был случай когда stderr_ был None, так и не понял почему
-				if stderr_ and "SyntaxError" in stderr_:
-					if retry > 1:
-						is_retry = False
-					retry += 1
-				else:
-					is_retry = False
-				if stdout_:
-					# rstrip тупит когда ожидаемый результат \n\n. Стрипует
-					# полностью stdout_ \n\n и на выходе получает ''
-					# из-за чего тест падает, хотя код написан правильно
-					stdout_ = stdout_[:-1] if stdout_.endswith('\n') else stdout_
-					is_eq = stdout_ == ''.join(self._read_file(path=os.path.join(unpack_arch_path, res)))
-				# ты же не хочешь чтобы тебе заспамило папку говном?
-				os.remove(tmp_file.name)
-			if stderr_:
-				self.status = self.__STATUSES[2]
-			elif not is_eq:
-				self.status = self.__STATUSES[1]
-			else:
-				self.status = self.__STATUSES[0]
-			except_res = self._read_file(path=os.path.join(unpack_arch_path, res))
-			input_data = self._read_file(path=os.path.join(unpack_arch_path, req))
-			yield stdout_, except_res, input_data, stderr_, is_eq
-		
-	def run(self) -> None:
-		"""
-			Работает с пользователем. Выводит на экран 
-			сообщения. Кароче, это пользовательский интерфейс.
-
-			Повтор тестов очень удобен в случаях когда тесты
-			провалились и нужно допилить тестируемую программу.
-			После допила кода просто перезапускаешь тесты без
-			всей возник с выбором архива с тестами и файла программы
-			в файловом менеджере.
-		"""
-		print(self.programm_path)
-		print(self.archive_path)
-		retry = 'y'
-		while retry != 'n':
-			for ivent, group in enumerate(self._test_executor(), 1):
-				stdout_, except_res, input_data, stderr_, is_eq = group
-				print(f"\nТест №{ivent}")
-				print("===============================================")
-				print(f"Входящие данные:")
-				for row in input_data:
-					print(row, end='')
-				print(f"\n\nОжидаемый результат:")
-				for row in except_res:
-					print(row, end='')
-				print(f"\n\nВыход тестируемой программы:\n{stdout_}")
-				print("===============================================")
-				if not is_eq:
-					if self.status == "ERROR":
-						print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
-					elif self.status == "FAILURE":
-						print(f"ПРОВАЛ! ТЕСТ №{ivent}")
-					break
-			if self.status == "SUCCESS":
-				print("Все тесты пройдены!")
-			retry = ''
-			while retry not in ('y', 'n'):
-				retry = input("(y/n), если хочешь повторить: ").rstrip().lower()
+            Повтор тестов очень удобен в случаях когда тесты
+            провалились и нужно допилить тестируемую программу.
+            После допила кода просто перезапускаешь тесты без
+            всей возник с выбором архива с тестами и файла программы
+            в файловом менеджере.
+        """
+        print(self.programm_path)
+        print(self.archive_path)
+        retry = 'y'
+        while retry != 'n':
+            for ivent, group in enumerate(self._test_executor(), 1):
+                stdout_, except_res, input_data, stderr_, is_eq = group
+                print(f"\nТест №{ivent}")
+                print("===============================================")
+                print(f"Входящие данные:")
+                for row in input_data:
+                    print(row, end='')
+                print(f"\n\nОжидаемый результат:")
+                for row in except_res:
+                    print(row, end='')
+                print(f"\n\nВыход тестируемой программы:\n{stdout_}")
+                print("===============================================")
+                if not is_eq:
+                    if self.status == "ERROR":
+                        print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
+                    elif self.status == "FAILURE":
+                        print(f"ПРОВАЛ! ТЕСТ №{ivent}")
+                    break
+            if self.status == "SUCCESS":
+                print("Все тесты пройдены!")
+            retry = ''
+            while retry not in ('y', 'n'):
+                retry = input("(y/n), если хочешь повторить: ").rstrip().lower()
 
 
 class TestExecutorForTests(TestExecutor):
-	"""
-		Этот класс нужен чисто чтобы затестить класс TestExecutor.
-		Для тестов нужно подшаманить пользовательский интерфейс
-		чтобы он не заправшивал повтор тестов.
-	"""
-	def __init__(self, archive_path: str='', programm_path: str='') :
-		self.archive_path = archive_path
-		self.programm_path = programm_path
-		self.programm = None
-		self.status = None
+    """
+        Этот класс нужен чисто чтобы затестить класс TestExecutor.
+        Для тестов нужно подшаманить пользовательский интерфейс
+        чтобы он не заправшивал повтор тестов.
+    """
+    def __init__(self, archive_path: str='', programm_path: str='') :
+        self.archive_path = archive_path
+        self.programm_path = programm_path
+        self.programm = None
+        self.status = None
 
-	def run(self) -> tuple:
-		print(self.programm_path)
-		print(self.archive_path)
-		for ivent, group in enumerate(self._test_executor(), 1):
-			stdout_, except_res, input_data, stderr_, is_eq = group
-			print(f"\nТест №{ivent}")
-			print("===============================================")
-			print(f"Входящие данные:")
-			for row in input_data:
-				print(row, end='')
-			print(f"\n\nОжидаемый результат:")
-			for row in except_res:
-				print(row, end='')
-			print(f"\n\nВыход тестируемой программы:\n{stdout_}")
-			print("===============================================")
-			if not is_eq:
-				if self.status == "ERROR":
-					print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
-				elif self.status == "FAILURE":
-					print(f"ПРОВАЛ! ТЕСТ №{ivent}")
-				break
-		if self.status == "SUCCESS":
-			print("Все тесты пройдены!")
-		return self.status, None
+    def run(self) -> tuple:
+        print(self.programm_path)
+        print(self.archive_path)
+        for ivent, group in enumerate(self._test_executor(), 1):
+            stdout_, except_res, input_data, stderr_, is_eq = group
+            print(f"\nТест №{ivent}")
+            print("===============================================")
+            print(f"Входящие данные:")
+            for row in input_data:
+                print(row, end='')
+            print(f"\n\nОжидаемый результат:")
+            for row in except_res:
+                print(row, end='')
+            print(f"\n\nВыход тестируемой программы:\n{stdout_}")
+            print("===============================================")
+            if not is_eq:
+                if self.status == "ERROR":
+                    print(f"У твоей программы вышибло пробки по типу\n{stderr_}")
+                elif self.status == "FAILURE":
+                    print(f"ПРОВАЛ! ТЕСТ №{ivent}")
+                break
+        if self.status == "SUCCESS":
+            print("Все тесты пройдены!")
+        return self.status, None
 
 def recviz(function):
-	"""
-		Декоратор наглядно показывает порядок вызова функции.
-		Учитывает рекурсивные вызовы. 
-		Примеры: 
-		
-		@recviz
-		def fib(n):
-		    if n <= 2:
-		        return 1
-		    else:
-		        return fib(n - 1) + fib(n - 2)
-		
-		fib(4)
-		
-		Output:
-		-> fib(4)
-		    -> fib(3)
-		        -> fib(2)
-		        <- 1
-		        -> fib(1)
-		        <- 1
-		    <- 2
-		    -> fib(2)
-		    <- 1
-		<- 3
+    """
+        Декоратор наглядно показывает порядок вызова функции.
+        Учитывает рекурсивные вызовы. 
+        Примеры: 
+        
+        @recviz
+        def fib(n):
+            if n <= 2:
+                return 1
+            else:
+                return fib(n - 1) + fib(n - 2)
+        
+        fib(4)
+        
+        Output:
+        -> fib(4)
+            -> fib(3)
+                -> fib(2)
+                <- 1
+                -> fib(1)
+                <- 1
+            <- 2
+            -> fib(2)
+            <- 1
+        <- 3
 
-		@recviz
-		def fact(n):
-		    if n == 0:
-		        return 1
-		    else:
-		        return n*fact(n-1)
-		        
-		fact(5)
-		
-		Output:
-		-> fact(5)
-		    -> fact(4)
-		        -> fact(3)
-		            -> fact(2)
-		                -> fact(1)
-		                    -> fact(0)
-		                    <- 1
-		                <- 1
-		            <- 2
-		        <- 6
-		    <- 24
-		<- 120
+        @recviz
+        def fact(n):
+            if n == 0:
+                return 1
+            else:
+                return n*fact(n-1)
+                
+        fact(5)
+        
+        Output:
+        -> fact(5)
+            -> fact(4)
+                -> fact(3)
+                    -> fact(2)
+                        -> fact(1)
+                            -> fact(0)
+                            <- 1
+                        <- 1
+                    <- 2
+                <- 6
+            <- 24
+        <- 120
 
-		Хочу заметить, что, если в рекурссивной функции реализовано
-		замыкание такого вида:
-		def number_of_frogs(year: int):
-			frogs = 77
-			@recviz
-			def wrapper(n: int=1) -> int:
-				nonlocal frogs
-				if n == year:
-					return frogs
-				else:
-					frogs = 3 * (frogs - 30)
-					# print(n)
-					return wrapper(n + 1)
-			return wrapper()
-		слудет декорировать вложенную функцию Ы
+        Хочу заметить, что, если в рекурссивной функции реализовано
+        замыкание такого вида:
+        def number_of_frogs(year: int):
+            frogs = 77
+            @recviz
+            def wrapper(n: int=1) -> int:
+                nonlocal frogs
+                if n == year:
+                    return frogs
+                else:
+                    frogs = 3 * (frogs - 30)
+                    # print(n)
+                    return wrapper(n + 1)
+            return wrapper()
+        слудет декорировать вложенную функцию Ы
 
-	"""
-	depth = -1
-	@wraps(function)
-	def wrapper(*args, **kwargs):
-		nonlocal depth		
-		args_str = map(str, args)
-		kwargs_str = (f"{key}={repr(value)}" for key, value in kwargs.items())
-		all_args = ', '.join(list(args_str) + list(kwargs_str))
-		func_name = f"{function.__name__}({all_args})"
-		depth += 1
-		print(f"{depth * ' ' * 4}-> " + func_name)
-		res = function(*args, **kwargs)
-		print(f"{depth * ' ' * 4}<- {repr(res)}")
-		depth -= 1
-		return res
-	return wrapper
+    """
+    depth = -1
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        nonlocal depth		
+        args_str = map(str, args)
+        kwargs_str = (f"{key}={repr(value)}" for key, value in kwargs.items())
+        all_args = ', '.join(list(args_str) + list(kwargs_str))
+        func_name = f"{function.__name__}({all_args})"
+        depth += 1
+        print(f"{depth * ' ' * 4}-> " + func_name)
+        res = function(*args, **kwargs)
+        print(f"{depth * ' ' * 4}<- {repr(res)}")
+        depth -= 1
+        return res
+    return wrapper
 
 
 def measure(function) -> Callable:
-	"""
-		Декоратор вычисляет время работы программы и
-		пиковое значение памяти.
-		Выводит на экран вычисленное время и память
-	"""
-	@wraps(function)
-	def wrapper(*args, **kwargs) -> Any:
-		tracemalloc.start()
-		start_time = time.perf_counter()
-		res = function(*args, **kwargs)
-		end_time = time.perf_counter()
-		current, peak = tracemalloc.get_traced_memory()
-		print(f"Время выполнения программы: {round(end_time - start_time, 3)} сек")
-		print(f"Текущая память: {current / 1024 / 1024:.2f} MB")
-		print(f"Пиковое использование памяти: {peak / 1024 / 1024:.2f} MB")
-		tracemalloc.stop()
-		return res
-	return wrapper
+    """
+        Декоратор вычисляет время работы программы и
+        пиковое значение памяти.
+        Выводит на экран вычисленное время и память
+    """
+    @wraps(function)
+    def wrapper(*args, **kwargs) -> Any:
+        tracemalloc.start()
+        start_time = time.perf_counter()
+        res = function(*args, **kwargs)
+        end_time = time.perf_counter()
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"Время выполнения программы: {round(end_time - start_time, 3)} сек")
+        print(f"Текущая память: {current / 1024 / 1024:.2f} MB")
+        print(f"Пиковое использование памяти: {peak / 1024 / 1024:.2f} MB")
+        tracemalloc.stop()
+        return res
+    return wrapper
 
 
 def reply(r: int=1) -> Callable:
-	"""
-		Декоратор для повтора вызова декорирумой функции.
-		r: int - Сколько раз повтрить вызов функции
-		Возвращает словарь вида: "номер_вызов": "результат"
-	"""
-	def decorator(function) -> Callable:
-		@wraps(function)
-		def wrapper(*args, **kwargs) -> Any:
-			cache = {}
-			for ivent in range(r + 1):
-				res = function(*args, **kwargs)
-				cache[ivent] = res
-			return cache
-		return wrapper
-	return decorator
+    """
+        Декоратор для повтора вызова декорирумой функции.
+        r: int - Сколько раз повтрить вызов функции
+        Возвращает словарь вида: "номер_вызов": "результат"
+    """
+    def decorator(function) -> Callable:
+        @wraps(function)
+        def wrapper(*args, **kwargs) -> Any:
+            cache = {}
+            for ivent in range(r + 1):
+                res = function(*args, **kwargs)
+                cache[ivent] = res
+            return cache
+        return wrapper
+    return decorator
 
 
 if __name__ == "__main__":
-	obj = TestExecutor()
-	obj.run()
+    obj = TestExecutor()
+    obj.run()
